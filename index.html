@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Pendaftaran Padel Civitas Akademika</title>
+    <!-- Favicon SVG Inline -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2316a34a'/><circle cx='50' cy='50' r='30' fill='%23ffffff'/></svg>">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            200: '#bbf7d0',
+                            300: '#86efac',
+                            400: '#4ade80',
+                            500: '#22c55e',
+                            600: '#16a34a', // Emerald 600
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#14532d',
+                            950: '#022c22',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Export Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #0f172a; }
+        .bento-card { background-color: #ffffff; border-radius: 1.5rem; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); border: 1px solid #e2e8f0; }
+        .shimmer { animation: shimmer 2s infinite linear; background: linear-gradient(to right, #f1f5f9 4%, #e2e8f0 25%, #f1f5f9 36%); background-size: 1000px 100%; }
+        @keyframes shimmer { 0% { background-position: -1000px 0; } 100% { background-position: 1000px 0; } }
+        /* Light mode scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f8fafc; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col relative" onload="initApp()">
+
+    <!-- Smart UI Warning for GAS URL -->
+    <div id="urlWarning" class="hidden w-full bg-red-600 text-white text-sm font-medium p-3 text-center z-[10000] border-b border-red-700 shadow-md">
+        PERHATIAN: URL Google Apps Script belum diatur. Buka file index.html dan masukkan URL pada variabel SCRIPT_URL.
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-white/90 z-[9999] hidden flex-col justify-center items-center backdrop-blur-sm">
+        <svg class="animate-spin h-12 w-12 text-brand-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span class="text-slate-800 font-medium tracking-wide">Memproses Data...</span>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed top-6 right-6 z-[2000] flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- AUTHENTICATION VIEW -->
+    <div id="authView" class="flex-1 flex items-center justify-center p-4">
+        <div class="bento-card w-full max-w-md relative overflow-hidden bg-white border-2 border-brand-100">
+            <div class="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 rounded-full bg-brand-50 opacity-50 blur-2xl"></div>
+            
+            <div class="text-center mb-8 relative z-10">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-50 mb-4 text-brand-600 border border-brand-200 shadow-sm">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-800 tracking-tight">Padel Civitas</h1>
+                <p class="text-sm text-slate-500 mt-2">Portal Pendaftaran & Jadwal Turnamen</p>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" class="space-y-5 relative z-10">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Email Anda</label>
+                    <input type="email" id="loginEmail" required class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all placeholder-slate-400">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Kata Sandi</label>
+                    <input type="password" id="loginPassword" required class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all placeholder-slate-400">
+                </div>
+                <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl px-4 py-3 transition-colors shadow-md shadow-brand-600/30">
+                    Masuk ke Sistem
+                </button>
+                <div class="text-center mt-4 text-sm text-slate-600">
+                    Peserta Baru? <a href="#" id="toggleRegister" class="text-brand-600 hover:text-brand-700 font-bold transition-colors">Daftar Sekarang</a>
+                </div>
+            </form>
+
+            <!-- Register Form -->
+            <form id="registerForm" class="space-y-4 hidden relative z-10">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
+                        <input type="text" id="regNama" required class="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all placeholder-slate-400" placeholder="Sesuai Identitas">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Kampus / Afiliasi</label>
+                        <input type="text" id="regKampus" required class="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all placeholder-slate-400" placeholder="Fakultas / Unit">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">No HP / WhatsApp</label>
+                        <input type="tel" id="regHp" required class="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all placeholder-slate-400" placeholder="08xxxxxxxxxx">
+                    </div>
+                    <div class="md:col-span-2 border-t border-slate-200 pt-2 mt-2">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Email Akademik (Untuk Login)</label>
+                        <input type="email" id="regEmail" required class="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Kata Sandi (Untuk Login)</label>
+                        <input type="password" id="regPassword" required class="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all">
+                    </div>
+                </div>
+                
+                <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl px-4 py-3 mt-4 transition-colors shadow-md shadow-brand-600/30">
+                    Daftar Akun Baru
+                </button>
+                <div class="text-center mt-4 text-sm text-slate-600">
+                    Sudah punya akun? <a href="#" id="toggleLogin" class="text-brand-600 hover:text-brand-700 font-bold transition-colors">Masuk di sini</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN DASHBOARD -->
+    <div id="mainDashboard" class="hidden flex-1 flex flex-col md:flex-row w-full max-w-7xl mx-auto p-4 gap-6">
+        
+        <!-- Sidebar Navigation -->
+        <aside class="w-full md:w-64 flex-shrink-0 flex flex-col gap-4">
+            <div class="bento-card flex items-center gap-4 bg-white border-slate-200">
+                <div class="w-12 h-12 bg-brand-50 rounded-full flex items-center justify-center border border-brand-200 text-brand-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                </div>
+                <div class="overflow-hidden">
+                    <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">Akses Sistem</p>
+                    <p id="userRoleText" class="font-bold text-slate-800 capitalize truncate"></p>
+                </div>
+            </div>
+
+            <nav class="bento-card flex-1 flex flex-col gap-2 bg-white border-slate-200">
+                
+                <!-- Menu Peserta -->
+                <div id="menuGrupPeserta" class="hidden flex-col gap-2">
+                    <button id="btnNavPendaftaran" onclick="switchView('viewPendaftaranPeserta', 'btnNavPendaftaran')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-brand-600 text-white font-semibold transition-colors shadow-md">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Pendaftaran Lomba
+                    </button>
+                    <button id="btnNavJadwalPeserta" onclick="switchView('viewJadwalPeserta', 'btnNavJadwalPeserta')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-semibold transition-colors border border-slate-200 hover:border-slate-300 shadow-sm">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        Jadwal Pertandingan
+                    </button>
+                </div>
+
+                <!-- Menu Keuangan -->
+                <button id="menuKeuangan" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-brand-600 text-white font-semibold transition-colors shadow-md hidden">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z"></path></svg>
+                    Verifikasi Keuangan
+                </button>
+
+                <!-- Menu Panitia -->
+                <button id="menuPanitia" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-brand-600 text-white font-semibold transition-colors shadow-md hidden">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    Manajemen Lomba
+                </button>
+
+                <!-- Logout -->
+                <div class="mt-auto pt-6 border-t border-slate-200">
+                    <button onclick="logout()" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 font-medium transition-colors border border-transparent hover:border-red-200">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                        Keluar Sistem
+                    </button>
+                </div>
+            </nav>
+        </aside>
+
+        <main class="flex-1 relative">
+            
+            <!-- ============================== -->
+            <!-- ROLE: PESERTA - PENDAFTARAN    -->
+            <!-- ============================== -->
+            <div id="viewPendaftaranPeserta" class="role-view hidden flex-col gap-4">
+                
+                <!-- KARTU BIODATA -->
+                <div class="bento-card relative overflow-hidden bg-white border-brand-200 border-2">
+                    <div class="absolute top-0 right-0 w-64 h-64 bg-brand-50 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
+                    <div class="flex items-center gap-3 mb-4 border-b border-slate-200 pb-3">
+                        <svg class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
+                        <h3 class="font-bold text-lg text-slate-800">Biodata Peserta</h3>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm relative z-10">
+                        <div><span class="text-slate-500 block mb-1 text-xs uppercase tracking-wider font-semibold">Nama Lengkap</span><strong id="dispNama" class="text-slate-900 text-base"></strong></div>
+                        <div><span class="text-slate-500 block mb-1 text-xs uppercase tracking-wider font-semibold">Email Akademik</span><strong id="dispEmail" class="text-slate-900 text-base truncate block max-w-full"></strong></div>
+                        <div><span class="text-slate-500 block mb-1 text-xs uppercase tracking-wider font-semibold">Kampus / Afiliasi</span><strong id="dispKampus" class="text-slate-900 text-base"></strong></div>
+                        <div><span class="text-slate-500 block mb-1 text-xs uppercase tracking-wider font-semibold">No. HP / WA</span><strong id="dispHp" class="text-slate-900 text-base"></strong></div>
+                    </div>
+                </div>
+
+                <!-- BANNER STATUS (Ditampilkan jika sudah daftar) -->
+                <div id="statusBanner" class="bento-card hidden flex-col md:flex-row items-center justify-between gap-6 border-slate-200">
+                    <div class="flex-1 text-center md:text-left">
+                        <p class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-2">Status Pembayaran</p>
+                        <div id="statusBadge" class="inline-block px-6 py-3 rounded-xl font-black text-lg md:text-xl tracking-wide w-full md:w-auto border-2"></div>
+                        <p id="statusText" class="text-slate-600 text-sm mt-3 bg-slate-50 inline-block px-4 py-2 rounded-lg border border-slate-200 font-medium"></p>
+                    </div>
+                    <div class="w-full md:w-auto flex flex-col gap-2">
+                        <button id="btnLihatBukti" onclick="" class="w-full bg-white hover:bg-slate-50 px-6 py-3 rounded-xl text-brand-700 border border-slate-300 hover:border-brand-400 transition-colors shadow-sm font-bold flex justify-center items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                            Buka Bukti Bayar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- FORM PENDAFTARAN & PEMBAYARAN (Ditampilkan jika belum daftar) -->
+                <div id="formSection" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bento-card flex flex-col border-slate-200 bg-white">
+                        <h2 class="text-xl font-bold mb-6 text-slate-800 border-b border-slate-200 pb-4 flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-lg bg-brand-50 text-brand-600 border border-brand-100 flex items-center justify-center">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"></path></svg>
+                            </div>
+                            Pilih Kategori
+                        </h2>
+                        <form id="pesertaForm" class="flex-1 flex flex-col gap-6">
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-2">Kategori Lomba Padel</label>
+                                <select id="kategoriPeserta" required class="w-full bg-white border border-slate-300 rounded-xl px-4 py-4 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all cursor-pointer font-medium shadow-sm">
+                                    <option value="" disabled selected>-- Pilih Kategori --</option>
+                                    <option value="Ganda Putra">Ganda Putra</option>
+                                    <option value="Ganda Putri">Ganda Putri</option>
+                                    <option value="Ganda Campuran">Ganda Campuran</option>
+                                </select>
+                            </div>
+                            <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-600 leading-relaxed mt-auto">
+                                <span class="font-bold text-slate-700 block mb-1">Catatan Penting:</span>
+                                Pemilihan kategori akan dikunci secara permanen setelah bukti bayar terkirim. Pastikan pilihan Anda benar.
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="bento-card flex flex-col border-slate-200 bg-white">
+                        <h2 class="text-xl font-bold mb-6 text-slate-800 border-b border-slate-200 pb-4 flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-lg bg-brand-50 text-brand-600 border border-brand-100 flex items-center justify-center">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            </div>
+                            Upload Bukti
+                        </h2>
+                        <div class="flex-1 flex flex-col justify-center items-center text-center p-6 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 relative mb-4 hover:border-brand-400 transition-colors">
+                            <div class="w-24 h-24 bg-white rounded-xl mb-4 p-2 flex items-center justify-center shadow-sm border border-slate-200">
+                                <svg class="w-12 h-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                            </div>
+                            <p class="text-sm text-slate-900 font-bold mb-1">Unggah Screenshot Mayar/QRIS</p>
+                            <div class="w-full mt-4">
+                                <input type="file" id="fileBukti" accept="image/*" class="w-full text-sm text-slate-600 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-brand-600 file:text-white hover:file:bg-brand-700 transition-all cursor-pointer bg-white border border-slate-200 shadow-sm">
+                            </div>
+                            <!-- Hidden Canvas for Compression -->
+                            <canvas id="compressCanvas" class="hidden"></canvas>
+                        </div>
+                        <button onclick="submitPendaftaran()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl px-4 py-4 transition-colors shadow-md text-base">
+                            Kirim & Konfirmasi
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================== -->
+            <!-- ROLE: PESERTA - JADWAL         -->
+            <!-- ============================== -->
+            <div id="viewJadwalPeserta" class="role-view hidden flex-col gap-4">
+                <div class="bento-card border-slate-200 bg-white">
+                    <h2 class="text-xl font-bold text-slate-800 mb-4 border-b border-slate-100 pb-4">Jadwal Pertandingan Anda</h2>
+                    <div class="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                        <table class="w-full text-left text-sm text-slate-600 whitespace-nowrap bg-white">
+                            <thead class="bg-brand-600 text-white font-semibold text-xs uppercase tracking-wider">
+                                <tr>
+                                    <th class="px-5 py-4">Waktu & Lapangan</th>
+                                    <th class="px-5 py-4">Kategori</th>
+                                    <th class="px-5 py-4">Tim 1</th>
+                                    <th class="px-5 py-4">Tim 2</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableJadwalPeserta" class="divide-y divide-slate-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================== -->
+            <!-- ROLE: KEUANGAN - VERIFIKASI    -->
+            <!-- ============================== -->
+            <div id="viewKeuangan" class="role-view hidden flex-col gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bento-card flex flex-col justify-between bg-white border-slate-200">
+                        <p class="text-sm font-bold text-slate-500 uppercase tracking-widest">Total Pendaftar</p>
+                        <p class="text-4xl font-black text-slate-800 mt-2" id="statTotal">0</p>
+                    </div>
+                    <div class="bento-card flex flex-col justify-between bg-white border-slate-200">
+                        <p class="text-sm font-bold text-slate-500 uppercase tracking-widest">Antrean Verifikasi</p>
+                        <p class="text-4xl font-black text-yellow-600 mt-2" id="statMenunggu">0</p>
+                    </div>
+                    <div class="bento-card flex flex-col justify-between bg-white border-slate-200 shadow-sm">
+                        <p class="text-sm font-bold text-slate-700 uppercase tracking-widest mb-3">Unduh Laporan</p>
+                        <div class="flex gap-3">
+                            <button onclick="exportExcel()" class="flex-1 bg-brand-50 hover:bg-brand-100 text-sm font-bold py-3 rounded-xl transition-colors text-brand-700 border border-brand-200">EXCEL</button>
+                            <button onclick="exportPDF()" class="flex-1 bg-brand-50 hover:bg-brand-100 text-sm font-bold py-3 rounded-xl transition-colors text-brand-700 border border-brand-200">PDF</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bento-card flex-1 flex flex-col border-slate-200 bg-white">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <h2 class="text-xl font-bold text-slate-800">Tabel Validasi Pembayaran</h2>
+                        <div class="relative w-full md:w-72">
+                            <input type="text" id="searchAdmin" placeholder="Cari nama/afiliasi..." class="w-full bg-white border border-slate-300 rounded-xl pl-11 pr-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-sm placeholder-slate-400">
+                            <svg class="w-5 h-5 absolute left-4 top-2.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                        <table class="w-full text-left text-sm text-slate-600 whitespace-nowrap bg-white">
+                            <thead class="bg-brand-600 text-white font-semibold text-xs uppercase tracking-wider">
+                                <tr>
+                                    <th class="px-5 py-4">Nama & Kontak</th>
+                                    <th class="px-5 py-4">Afiliasi & Kategori</th>
+                                    <th class="px-5 py-4">Bukti Upload</th>
+                                    <th class="px-5 py-4">Status</th>
+                                    <th class="px-5 py-4 text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody" class="divide-y divide-slate-200"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Server-Side Pagination -->
+                    <div class="flex flex-col md:flex-row justify-between items-center mt-6 pt-4 border-t border-slate-200 gap-4">
+                        <span class="text-sm font-semibold text-slate-500" id="pageInfo">Menunggu data...</span>
+                        <div class="flex gap-2">
+                            <button onclick="prevPage()" class="px-4 py-2 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">Mundur</button>
+                            <button onclick="nextPage()" class="px-4 py-2 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">Maju</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================== -->
+            <!-- ROLE: PANITIA - JADWAL         -->
+            <!-- ============================== -->
+            <div id="viewPanitia" class="role-view hidden flex-col gap-4">
+                
+                <!-- Form Tambah Jadwal -->
+                <div class="bento-card border-slate-200 bg-white">
+                    <h2 class="text-xl font-bold text-slate-800 mb-4 border-b border-slate-100 pb-4">Tambah Jadwal Baru</h2>
+                    <form id="formTambahJadwal" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <input type="datetime-local" id="jdwWaktu" required class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 shadow-sm">
+                        <input type="text" id="jdwKategori" placeholder="Kategori (Mis: Ganda Putra)" required class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 shadow-sm">
+                        <input type="text" id="jdwPemain1" placeholder="Nama Tim / Pemain 1" required class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 shadow-sm">
+                        <input type="text" id="jdwPemain2" placeholder="Nama Tim / Pemain 2" required class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 shadow-sm">
+                        <input type="text" id="jdwLapangan" placeholder="Lapangan" required class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 shadow-sm">
+                        <div class="lg:col-span-5 flex justify-end mt-2">
+                            <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl px-6 py-2.5 transition-colors shadow-md">Simpan Jadwal</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Tabel Jadwal Master -->
+                <div class="bento-card flex-1 border-slate-200 bg-white">
+                    <h2 class="text-xl font-bold text-slate-800 mb-4">Master Jadwal Pertandingan</h2>
+                    <div class="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                        <table class="w-full text-left text-sm text-slate-600 whitespace-nowrap bg-white">
+                            <thead class="bg-brand-600 text-white font-semibold text-xs uppercase tracking-wider">
+                                <tr>
+                                    <th class="px-5 py-4">Waktu & Lapangan</th>
+                                    <th class="px-5 py-4">Kategori</th>
+                                    <th class="px-5 py-4">Tim 1</th>
+                                    <th class="px-5 py-4">Tim 2</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableJadwalPanitia" class="divide-y divide-slate-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Image Modal for Proof Viewer (z-[1000]) -->
+    <div id="imageModal" class="fixed inset-0 bg-slate-900/90 z-[1000] hidden flex-col justify-center items-center backdrop-blur-sm p-4">
+        <button onclick="closeModal()" class="absolute top-6 right-6 text-white hover:text-red-400 bg-slate-800/50 p-3 rounded-full transition-colors shadow-md border border-slate-700">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+        <img id="modalImage" src="" class="max-w-full max-h-[85vh] rounded-2xl shadow-2xl border-4 border-white object-contain bg-white">
+        <p class="text-white mt-4 text-sm font-semibold tracking-wide bg-slate-800/80 px-4 py-2 rounded-lg">Pratinjau Bukti Transfer</p>
+    </div>
+
+    <script>
+        /**
+         * ----------------------------------------------------
+         * KONFIGURASI URL GOOGLE APPS SCRIPT (WAJIB DIISI)
+         * ----------------------------------------------------
+         */
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwkofqiLoQKXtNu3vtVATs1_kVsSwSULyePI7eO4UX2kRa_T2nXOyZ_-pGOa6f2ucWI/exec";
+        
+        let currentUser = null;
+        let adminDataCache = [];
+        let adminCurrentPage = 1;
+        let adminLimit = 10;
+        let adminSearchQuery = "";
+        let adminTotalRows = 0;
+        let searchTimeout;
+
+        function initApp() {
+            if (SCRIPT_URL.includes("ISI_DENGAN")) {
+                document.getElementById('urlWarning').classList.remove('hidden');
+            }
+            const savedSession = localStorage.getItem('padelSession');
+            if (savedSession) {
+                try {
+                    currentUser = JSON.parse(savedSession);
+                    renderDashboard();
+                } catch(e) { localStorage.removeItem('padelSession'); }
+            }
+        }
+
+        function showLoading() { document.getElementById('loadingOverlay').classList.remove('hidden'); document.getElementById('loadingOverlay').classList.add('flex'); }
+        function hideLoading() { document.getElementById('loadingOverlay').classList.add('hidden'); document.getElementById('loadingOverlay').classList.remove('flex'); }
+        
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            const colors = type === 'error' ? 'bg-red-500 border-red-600 text-white' : (type === 'success' ? 'bg-brand-600 border-brand-700 text-white' : 'bg-slate-800 border-slate-900 text-white');
+            toast.className = `flex items-center gap-3 p-4 rounded-xl shadow-xl border-l-4 ${colors} transform transition-all duration-300 translate-x-full opacity-0 pointer-events-auto min-w-[300px]`;
+            toast.innerHTML = `<span class="text-sm font-bold">${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => { toast.classList.remove('translate-x-full', 'opacity-0'); }, 10);
+            setTimeout(() => { toast.classList.add('opacity-0', 'translate-x-full'); setTimeout(() => toast.remove(), 300); }, 3500);
+        }
+
+        async function fetchAPI(payload, retries = 1) {
+            for(let i = 0; i <= retries; i++) {
+                try {
+                    const response = await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(payload),
+                        redirect: 'follow'
+                    });
+                    const result = await response.json();
+                    if(result.status === 'success') return result.data;
+                    throw new Error(result.message || 'Server error');
+                } catch (e) {
+                    if (i === retries) throw e;
+                    await new Promise(r => setTimeout(r, 1500));
+                }
+            }
+        }
+
+        document.getElementById('toggleRegister').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('loginForm').classList.add('hidden'); document.getElementById('registerForm').classList.remove('hidden'); });
+        document.getElementById('toggleLogin').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('registerForm').classList.add('hidden'); document.getElementById('loginForm').classList.remove('hidden'); });
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault(); showLoading();
+            try {
+                const payload = { action: 'login', email: document.getElementById('loginEmail').value, password: btoa(document.getElementById('loginPassword').value) };
+                currentUser = await fetchAPI(payload);
+                localStorage.setItem('padelSession', JSON.stringify(currentUser));
+                showToast(`Selamat datang, ${currentUser.nama}`, 'success');
+                renderDashboard();
+                document.getElementById('loginForm').reset();
+            } catch (error) { showToast(error.message, 'error'); } finally { hideLoading(); }
+        });
+
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault(); showLoading();
+            try {
+                const payload = {
+                    action: 'register', nama: document.getElementById('regNama').value, kampus: document.getElementById('regKampus').value, hp: document.getElementById('regHp').value,
+                    email: document.getElementById('regEmail').value, password: btoa(document.getElementById('regPassword').value)
+                };
+                await fetchAPI(payload);
+                showToast('Registrasi berhasil. Silakan Masuk.', 'success');
+                document.getElementById('toggleLogin').click();
+                document.getElementById('registerForm').reset();
+            } catch (error) { showToast(error.message, 'error'); } finally { hideLoading(); }
+        });
+
+        function logout() {
+            currentUser = null; localStorage.removeItem('padelSession');
+            document.getElementById('mainDashboard').classList.add('hidden'); document.getElementById('authView').classList.remove('hidden'); showToast('Berhasil keluar', 'info');
+        }
+
+        function renderDashboard() {
+            document.getElementById('authView').classList.add('hidden');
+            document.getElementById('mainDashboard').classList.remove('hidden');
+            document.getElementById('userRoleText').innerText = currentUser.role;
+
+            // Reset Menus
+            document.getElementById('menuGrupPeserta').classList.add('hidden');
+            document.getElementById('menuKeuangan').classList.add('hidden');
+            document.getElementById('menuPanitia').classList.add('hidden');
+            document.querySelectorAll('.role-view').forEach(v => { v.classList.add('hidden'); v.classList.remove('flex'); });
+
+            if (currentUser.role === 'keuangan') {
+                document.getElementById('menuKeuangan').classList.remove('hidden');
+                document.getElementById('viewKeuangan').classList.remove('hidden');
+                document.getElementById('viewKeuangan').classList.add('flex');
+                loadKeuanganData();
+            } 
+            else if (currentUser.role === 'panitia') {
+                document.getElementById('menuPanitia').classList.remove('hidden');
+                document.getElementById('viewPanitia').classList.remove('hidden');
+                document.getElementById('viewPanitia').classList.add('flex');
+                loadJadwal(false);
+            } 
+            else {
+                document.getElementById('menuGrupPeserta').classList.remove('hidden');
+                document.getElementById('menuGrupPeserta').classList.add('flex');
+                
+                document.getElementById('dispNama').innerText = currentUser.nama || '-';
+                document.getElementById('dispEmail').innerText = currentUser.email || '-';
+                document.getElementById('dispKampus').innerText = currentUser.kampus || '-';
+                document.getElementById('dispHp').innerText = currentUser.hp || '-';
+                
+                switchView('viewPendaftaranPeserta', 'btnNavPendaftaran');
+                syncStatusPeserta();
+            }
+        }
+
+        function switchView(viewId, btnId) {
+            document.querySelectorAll('.role-view').forEach(v => { v.classList.add('hidden'); v.classList.remove('flex'); });
+            document.getElementById(viewId).classList.remove('hidden');
+            document.getElementById(viewId).classList.add('flex');
+            
+            const btnPend = document.getElementById('btnNavPendaftaran');
+            const btnJdw = document.getElementById('btnNavJadwalPeserta');
+            const activeClass = ['bg-brand-600', 'text-white', 'shadow-md'];
+            const inactiveClass = ['bg-white', 'text-slate-700', 'border-slate-200'];
+
+            btnPend.classList.remove(...activeClass, ...inactiveClass); btnJdw.classList.remove(...activeClass, ...inactiveClass);
+
+            if(btnId === 'btnNavPendaftaran') {
+                btnPend.classList.add(...activeClass); btnJdw.classList.add(...inactiveClass);
+            } else {
+                btnJdw.classList.add(...activeClass); btnPend.classList.add(...inactiveClass);
+                loadJadwal(true);
+            }
+        }
+
+        async function syncStatusPeserta() {
+            const formSec = document.getElementById('formSection');
+            const statusBanner = document.getElementById('statusBanner');
+            try {
+                const data = await fetchAPI({ action: 'checkStatus', email: currentUser.email });
+                if (data && data.status) {
+                    formSec.classList.add('hidden');
+                    statusBanner.classList.remove('hidden'); statusBanner.classList.add('flex');
+                    document.getElementById('statusText').innerText = `Kategori: ${data.kategori_lomba} • ID: ${data.id_pendaftaran}`;
+                    document.getElementById('btnLihatBukti').setAttribute('onclick', `viewImage('${data.url_bukti}')`);
+
+                    const badge = document.getElementById('statusBadge');
+                    if(data.status === 'Lunas') {
+                        badge.className = 'inline-block px-6 py-3 rounded-xl font-black text-lg tracking-wide w-full md:w-auto shadow-sm bg-brand-50 text-brand-700 border-brand-300';
+                        badge.innerText = 'LUNAS TERVERIFIKASI';
+                    } else if(data.status === 'Ditolak') {
+                        badge.className = 'inline-block px-6 py-3 rounded-xl font-black text-lg tracking-wide w-full md:w-auto shadow-sm bg-red-50 text-red-700 border-red-300';
+                        badge.innerText = 'BUKTI DITOLAK';
+                    } else {
+                        badge.className = 'inline-block px-6 py-3 rounded-xl font-black text-lg tracking-wide w-full md:w-auto shadow-sm bg-yellow-50 text-yellow-700 border-yellow-300';
+                        badge.innerText = 'MENUNGGU VERIFIKASI';
+                    }
+                } else {
+                    formSec.classList.remove('hidden'); statusBanner.classList.add('hidden');
+                }
+            } catch (e) {}
+        }
+
+        async function submitPendaftaran() {
+            const kategori = document.getElementById('kategoriPeserta').value;
+            const fileInput = document.getElementById('fileBukti');
+            if(!kategori || !fileInput.files[0]) return showToast('Kategori & Bukti Bayar wajib diisi!', 'error');
+            
+            showLoading();
+            try {
+                const base64Compressed = await compressImage(fileInput.files[0]);
+                await fetchAPI({ action: 'submitPendaftaran', email: currentUser.email, kategori: kategori, buktiBase64: base64Compressed });
+                showToast('Terkirim ke panitia', 'success'); syncStatusPeserta();
+            } catch (err) { showToast(err.message, 'error'); } finally { hideLoading(); }
+        }
+
+        function compressImage(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader(); reader.readAsDataURL(file);
+                reader.onload = e => {
+                    const img = new Image(); img.src = e.target.result;
+                    img.onload = () => {
+                        const canvas = document.getElementById('compressCanvas'); const ctx = canvas.getContext('2d');
+                        let w = img.width, h = img.height;
+                        if (w > 800) { h *= 800 / w; w = 800; }
+                        canvas.width = w; canvas.height = h; ctx.drawImage(img, 0, 0, w, h);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
+                    }; img.onerror = err => reject(err);
+                };
+            });
+        }
+
+        document.getElementById('searchAdmin').addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => { adminSearchQuery = e.target.value; adminCurrentPage = 1; loadKeuanganData(); }, 500); 
+        });
+
+        async function loadKeuanganData() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = `<tr><td colspan="5" class="py-12"><div class="shimmer h-12 w-3/4 mx-auto rounded-xl opacity-50"></div></td></tr>`;
+            try {
+                const res = await fetchAPI({ action: 'getAdminData', page: adminCurrentPage, limit: adminLimit, search: adminSearchQuery });
+                adminDataCache = res.list; adminTotalRows = res.totalMatched;
+                document.getElementById('statTotal').innerText = res.totalGlobal || 0; document.getElementById('statMenunggu').innerText = res.totalMenunggu || 0;
+                renderTable(adminDataCache);
+                const start = (adminCurrentPage - 1) * adminLimit;
+                document.getElementById('pageInfo').innerText = `Tampil ${adminTotalRows===0?0:start+1}-${Math.min(start+adminLimit, adminTotalRows)} dari ${adminTotalRows}`;
+            } catch (err) { tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-red-600">${err.message}</td></tr>`; }
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('tableBody'); tbody.innerHTML = '';
+            if(!data.length) return tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-400">Tidak ada data.</td></tr>`;
+            
+            data.forEach(p => {
+                let sColor = p.status === 'Lunas' ? 'text-brand-700 bg-brand-50 border-brand-200' : (p.status === 'Ditolak' ? 'text-red-700 bg-red-50 border-red-200' : 'text-yellow-700 bg-yellow-50 border-yellow-200');
+                let tr = document.createElement('tr'); tr.className = "hover:bg-slate-50 border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="px-5 py-5"><div class="font-bold text-slate-800">${p.nama}</div><div class="text-xs text-slate-500 mt-1">${p.hp} • ${p.email}</div></td>
+                    <td class="px-5 py-5"><div class="font-medium text-slate-700">${p.afiliasi}</div><div class="text-xs text-brand-600 uppercase font-bold">${p.kategori}</div></td>
+                    <td class="px-5 py-5"><button onclick="viewImage('${p.bukti}')" class="text-xs font-bold bg-white px-3 py-1.5 rounded-lg text-slate-600 border border-slate-300 shadow-sm">Lihat</button></td>
+                    <td class="px-5 py-5"><span class="px-3 py-1.5 rounded-md text-xs font-bold uppercase border ${sColor}">${p.status}</span></td>
+                    <td class="px-5 py-5 text-right">
+                        ${p.status === 'Menunggu Verifikasi' ? `
+                            <button onclick="updateStatus('${p.id}', 'Lunas')" class="p-2 bg-brand-600 hover:bg-brand-700 rounded-lg text-white shadow-sm mr-1">✓</button>
+                            <button onclick="updateStatus('${p.id}', 'Ditolak')" class="p-2 bg-red-600 hover:bg-red-700 rounded-lg text-white shadow-sm">X</button>
+                        ` : '<span class="text-xs text-slate-400 italic">Selesai</span>'}
+                    </td>
+                `; tbody.appendChild(tr);
+            });
+        }
+
+        async function updateStatus(id, newStatus) {
+            showLoading();
+            try { await fetchAPI({ action: 'updateStatus', id_pendaftaran: id, status: newStatus }); showToast('Status disave', 'success'); loadKeuanganData(); }
+            catch (err) { showToast(err.message, 'error'); } finally { hideLoading(); }
+        }
+
+        function prevPage() { if(adminCurrentPage > 1) { adminCurrentPage--; loadKeuanganData(); } }
+        function nextPage() { if(adminCurrentPage < Math.ceil(adminTotalRows / adminLimit)) { adminCurrentPage++; loadKeuanganData(); } }
+
+        async function loadJadwal(isPeserta = false) {
+            const tbodyId = isPeserta ? 'tableJadwalPeserta' : 'tableJadwalPanitia';
+            const tbody = document.getElementById(tbodyId);
+            tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-slate-400">Memuat jadwal...</td></tr>`;
+            try {
+                const payload = { action: 'getJadwal' };
+                if (isPeserta) payload.namaPeserta = currentUser.nama;
+                renderJadwal(await fetchAPI(payload), tbodyId);
+            } catch (err) { tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-red-600">${err.message}</td></tr>`; }
+        }
+
+        function renderJadwal(data, tbodyId) {
+            const tbody = document.getElementById(tbodyId); tbody.innerHTML = '';
+            if(!data.length) return tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-slate-400">Tidak ada jadwal tersedia.</td></tr>`;
+            
+            data.forEach(j => {
+                let tr = document.createElement('tr'); tr.className = "hover:bg-slate-50 border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="px-5 py-4"><div class="font-bold text-slate-800">${j.waktu}</div><div class="text-xs text-brand-600 font-semibold uppercase mt-1">${j.lapangan}</div></td>
+                    <td class="px-5 py-4 font-bold text-slate-700">${j.kategori}</td>
+                    <td class="px-5 py-4 font-medium text-slate-800">${j.pemain_1}</td>
+                    <td class="px-5 py-4 font-medium text-slate-800">${j.pemain_2}</td>
+                `; tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('formTambahJadwal')?.addEventListener('submit', async (e) => {
+            e.preventDefault(); showLoading();
+            try {
+                await fetchAPI({
+                    action: 'addJadwal', waktu: document.getElementById('jdwWaktu').value, kategori: document.getElementById('jdwKategori').value,
+                    pemain_1: document.getElementById('jdwPemain1').value, pemain_2: document.getElementById('jdwPemain2').value, lapangan: document.getElementById('jdwLapangan').value
+                });
+                showToast('Jadwal ditambahkan', 'success'); document.getElementById('formTambahJadwal').reset(); loadJadwal(false);
+            } catch (error) { showToast(error.message, 'error'); } finally { hideLoading(); }
+        });
+
+        function viewImage(src) { document.getElementById('modalImage').src = src; document.getElementById('imageModal').classList.remove('hidden'); document.getElementById('imageModal').classList.add('flex'); }
+        function closeModal() { document.getElementById('imageModal').classList.add('hidden'); document.getElementById('imageModal').classList.remove('flex'); }
+
+        async function fetchAllDataForExport() {
+            showLoading();
+            try { return (await fetchAPI({ action: 'getAdminData', page: 1, limit: 1000, search: "" })).list; }
+            catch(e) { showToast("Gagal mengambil data", "error"); return []; } finally { hideLoading(); }
+        }
+
+        async function exportExcel() {
+            const data = await fetchAllDataForExport(); if(!data.length) return;
+            const ws = XLSX.utils.json_to_sheet(data.map(p => ({ ID: p.id, Email: p.email, Nama: p.nama, Afiliasi: p.afiliasi, HP: p.hp, Kategori: p.kategori, Status: p.status, URL_Bukti: p.bukti })));
+            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Database_Padel");
+            XLSX.writeFile(wb, "Padel_Data.xlsx"); showToast('Excel diunduh', 'success');
+        }
+
+        async function exportPDF() {
+            const data = await fetchAllDataForExport(); if(!data.length) return;
+            const doc = new window.jspdf.jsPDF(); doc.text("Data Padel Civitas", 14, 15);
+            doc.autoTable({ startY: 20, head: [['Nama', 'Afiliasi', 'Kategori', 'Status']], body: data.map(p => [ p.nama, p.afiliasi, p.kategori, p.status ]),
+                theme: 'grid', headStyles: { fillColor: [22, 163, 74] }, styles: { fontSize: 9 } });
+            doc.save("Padel_Data.pdf"); showToast('PDF diunduh', 'success');
+        }
+    </script>
+</body>
+</html>
